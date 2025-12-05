@@ -1,326 +1,352 @@
--- Westbound 1911 Mobile Version
--- Didesain khusus untuk perangkat mobile
--- Fitur: Aimbot, ESP, Auto-Shoot
+--========================================================--
+-- POTATO HUB | ESP BOX + TRACER + AIMBOT SUAVE + FOV RGB
+--========================================================--
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local UIS = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
 
--- Konfigurasi
-local Config = {
-    Aimbot = {
-        Enabled = true,
-        FOV = 200,
-        Smoothing = 0.8,
-        TargetPart = "Head",
-        TeamCheck = true,
-        WallCheck = true,
-        AutoShoot = true
-    },
-    ESP = {
-        Enabled = true,
-        Box = true,
-        Name = true,
-        Health = true
-    },
-    UI = {
-        Opacity = 0.7,
-        ButtonSize = UDim2.new(0, 80, 0, 80)
-    }
-}
+--========================================================--
+-- CONFIG
+--========================================================--
+local AimbotOn = false
+local ESPOn = false
+local FOVRadius = 150
+local AimSmooth = 0.3  -- Diperbesar untuk pergerakan lebih cepat (nilai lebih besar = lebih cepat)
+local MaxAimDistance = 500  -- Jarak maksimum target aimbot
+local WallCheck = true      -- Cek tembok
+local PredictionTime = 0.08  -- Diperkecil untuk prediksi lebih responsif
 
--- Variabel
+--========================================================--
+-- GUI
+--========================================================--
+local gui = Instance.new("ScreenGui", game.CoreGui)
+gui.Name = "PotatoHub"
+
+local Main = Instance.new("Frame", gui)
+Main.Size = UDim2.new(0, 200, 0, 250)
+Main.Position = UDim2.new(0.05, 0, 0.3, 0)
+Main.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+Instance.new("UICorner", Main)
+
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1, 0, 0, 25)
+Title.BackgroundTransparency = 1
+Title.Text = "POTATO HUB"
+Title.TextColor3 = Color3.new(1, 1, 1)
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 16
+
+-- BOTÃO MINIMIZAR
+local MinBtn = Instance.new("TextButton", Main)
+MinBtn.Size = UDim2.new(0, 25, 0, 25)
+MinBtn.Position = UDim2.new(1, -30, 0, 0)
+MinBtn.BackgroundTransparency = 1
+MinBtn.Text = "-"
+MinBtn.TextColor3 = Color3.new(1, 1, 1)
+local minimized = false
+
+MinBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    for _, v in pairs(Main:GetChildren()) do
+        if v ~= Title and v ~= MinBtn then
+            v.Visible = not minimized
+        end
+    end
+    if minimized then
+        MinBtn.Text = "+"
+        Main.Size = UDim2.new(0, 200, 0, 25)
+    else
+        MinBtn.Text = "-"
+        Main.Size = UDim2.new(0, 200, 0, 250)
+    end
+end)
+
+-- ARRASTAR GUI
+local dragging = false
+local dragStart, startPos
+
+Title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        Main.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+Title.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+--========================================================--
+-- BOTÕES
+--========================================================--
+local function NewBtn(txt, y)
+    local b = Instance.new("TextButton", Main)
+    b.Size = UDim2.new(1, -20, 0, 25)
+    b.Position = UDim2.new(0, 10, 0, y)
+    b.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    b.TextColor3 = Color3.new(1, 1, 1)
+    b.Text = txt
+    b.Font = Enum.Font.Gotham
+    b.TextSize = 14
+    Instance.new("UICorner", b)
+    return b
+end
+
+local btnAimbot = NewBtn("Aimbot: OFF", 30)
+local btnESP = NewBtn("ESP: OFF", 60)
+
+btnAimbot.MouseButton1Click:Connect(function()
+    AimbotOn = not AimbotOn
+    btnAimbot.Text = "Aimbot: " .. (AimbotOn and "ON" or "OFF")
+end)
+
+btnESP.MouseButton1Click:Connect(function()
+    ESPOn = not ESPOn
+    btnESP.Text = "ESP: " .. (ESPOn and "ON" or "OFF")
+end)
+
+--========================================================--
+-- FOV SLIDER
+--========================================================--
+local FOVLabel = Instance.new("TextLabel", Main)
+FOVLabel.Size = UDim2.new(1, 0, 0, 20)
+FOVLabel.Position = UDim2.new(0, 0, 0, 90)
+FOVLabel.BackgroundTransparency = 1
+FOVLabel.TextColor3 = Color3.new(1, 1, 1)
+FOVLabel.Text = "Tamanho FOV: " .. FOVRadius
+
+local FOVBox = Instance.new("TextBox", Main)
+FOVBox.Size = UDim2.new(1, -20, 0, 25)
+FOVBox.Position = UDim2.new(0, 10, 0, 110)
+FOVBox.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+FOVBox.TextColor3 = Color3.new(1, 1, 1)
+FOVBox.PlaceholderText = "Digite FOV"
+Instance.new("UICorner", FOVBox)
+
+FOVBox.FocusLost:Connect(function()
+    local n = tonumber(FOVBox.Text)
+    if n and n >= 20 and n <= 1000 then
+        FOVRadius = n
+        FOVLabel.Text = "Tamanho FOV: " .. n
+        FOVCircle.Radius = n
+    end
+end)
+
+--========================================================--
+-- FOV RGB
+--========================================================--
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Visible = true
+FOVCircle.Thickness = 2
+FOVCircle.Filled = false
+FOVCircle.NumSides = 90
+FOVCircle.Radius = FOVRadius
+
+local hue = 0
+
+--========================================================--
+-- ESP COM BOX + TRACER
+--========================================================--
 local ESPObjects = {}
-local Target = nil
 
--- Fungsi untuk membuat tombol di layar
-local function CreateMobileButton(name, position, callback)
-    local button = Instance.new("TextButton")
-    button.Name = name
-    button.Size = Config.UI.ButtonSize
-    button.Position = position
-    button.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    button.BackgroundTransparency = 0.3
-    button.BorderSizePixel = 0
-    button.Text = ""
-    button.TextColor3 = Color3.fromRGB(255, 255, 255)
-    button.TextSize = 14
-    button.ZIndex = 10
-    
-    -- Efek saat ditekan
-    button.MouseButton1Down:Connect(function()
-        button.BackgroundTransparency = 0.1
-        if callback then callback(true) end
-    end)
-    
-    button.MouseButton1Up:Connect(function()
-        button.BackgroundTransparency = 0.3
-        if callback then callback(false) end
-    end)
-    
-    button.MouseLeave:Connect(function()
-        button.BackgroundTransparency = 0.3
-    end)
-    
-    -- Label
-    local label = Instance.new("TextLabel")
-    label.Name = "Label"
-    label.Size = UDim2.new(1, 0, 0.3, 0)
-    label.Position = UDim2.new(0, 0, 0.7, 0)
-    label.BackgroundTransparency = 1
-    label.Text = name
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextScaled = true
-    label.Parent = button
-    
-    return button
+local function AddESP(plr)
+    if plr == LP then return end
+    local box = Drawing.new("Square")
+    box.Thickness = 2
+    box.Filled = false
+    box.Color = Color3.fromRGB(0, 200, 255)
+
+    local line = Drawing.new("Line")
+    line.Thickness = 2
+    line.Color = Color3.fromRGB(0, 200, 255)
+
+    ESPObjects[plr] = { Box = box, Line = line }
 end
 
--- Fungsi untuk membuat joystick
-local function CreateJoystick()
-    local joystick = {}
-    local frame = Instance.new("Frame")
-    local outer = Instance.new("ImageLabel")
-    local inner = Instance.new("ImageLabel")
-    
-    -- Frame utama
-    frame.Name = "JoystickFrame"
-    frame.Size = UDim2.new(0.3, 0, 0.3, 0)
-    frame.Position = UDim2.new(0.1, 0, 0.6, 0)
-    frame.BackgroundTransparency = 1
-    
-    -- Lingkaran luar
-    outer.Name = "Outer"
-    outer.Size = UDim2.new(1, 0, 1, 0)
-    outer.BackgroundTransparency = 1
-    outer.Image = "rbxassetid://3570695787"
-    outer.ImageColor3 = Color3.fromRGB(255, 255, 255)
-    outer.ImageTransparency = 0.5
-    outer.ScaleType = Enum.ScaleType.Slice
-    outer.SliceCenter = Rect.new(100, 100, 100, 100)
-    outer.SliceScale = 0.2
-    outer.Parent = frame
-    
-    -- Lingkaran dalam
-    inner.Name = "Inner"
-    inner.Size = UDim2.new(0.5, 0, 0.5, 0)
-    inner.AnchorPoint = Vector2.new(0.5, 0.5)
-    inner.Position = UDim2.new(0.5, 0, 0.5, 0)
-    inner.BackgroundTransparency = 1
-    inner.Image = "rbxassetid://3570695787"
-    inner.ImageColor3 = Color3.fromRGB(200, 200, 200)
-    inner.ImageTransparency = 0.3
-    inner.ScaleType = Enum.ScaleType.Slice
-    inner.SliceCenter = Rect.new(100, 100, 100, 100)
-    inner.SliceScale = 0.2
-    inner.Parent = outer
-    
-    -- Fungsi untuk mengupdate posisi
-    function joystick:UpdatePosition(input)
-        local pos = Vector2.new(
-            (input.Position.X - outer.AbsolutePosition.X) / outer.AbsoluteSize.X,
-            (input.Position.Y - outer.AbsolutePosition.Y) / outer.AbsoluteSize.Y
-        )
-        
-        -- Batasi dalam lingkaran
-        local magnitude = math.min(1, pos.Magnitude * 2)
-        local direction = pos.Unit or Vector2.new(0, 0)
-        
-        inner.Position = UDim2.new(
-            0.5 + direction.X * magnitude * 0.5,
-            0,
-            0.5 + direction.Y * magnitude * 0.5,
-            0
-        )
-        
-        -- Return nilai untuk pergerakan karakter
-        return {
-            X = direction.X * magnitude,
-            Y = direction.Y * magnitude
-        }
+local function RemoveESP(plr)
+    if ESPObjects[plr] then
+        ESPObjects[plr].Box:Remove()
+        ESPObjects[plr].Line:Remove()
+        ESPObjects[plr] = nil
     end
-    
-    -- Reset posisi joystick
-    function joystick:Reset()
-        inner.Position = UDim2.new(0.5, 0, 0.5, 0)
-    end
-    
-    joystick.Frame = frame
-    return joystick
 end
 
--- Fungsi untuk membuat UI mobile
-local function CreateMobileUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MobileUI"
-    screenGui.ResetOnSpawn = false
+for _, p in pairs(Players:GetPlayers()) do AddESP(p) end
+Players.PlayerAdded:Connect(AddESP)
+Players.PlayerRemoving:Connect(RemoveESP)
+
+--========================================================--
+-- FUNÇÃO DE BUSCA DO ALVO MAIS PRÓXIMO
+--========================================================--
+local function IsVisible(target)
+    -- Cek apakah target terlihat (tidak terhalang tembok)
+    if not WallCheck then return true end
     
-    -- Joystick untuk pergerakan
-    local moveJoystick = CreateJoystick()
-    moveJoystick.Frame.Parent = screenGui
+    local camera = workspace.CurrentCamera
+    local origin = camera.CFrame.Position
+    local direction = (target.Position - origin).Unit * 500
     
-    -- Joystick untuk kamera
-    local cameraJoystick = CreateJoystick()
-    cameraJoystick.Frame.Position = UDim2.new(0.6, 0, 0.6, 0)
-    cameraJoystick.Frame.Parent = screenGui
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {LP.Character}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     
-    -- Tombol tembak
-    local shootButton = CreateMobileButton("FIRE", UDim2.new(0.8, 0, 0.7, 0), function(pressed)
-        Config.Aimbot.AutoShoot = pressed
-    end)
-    shootButton.Parent = screenGui
+    local raycastResult = workspace:Raycast(origin, direction, raycastParams)
     
-    -- Tombol lompat
-    local jumpButton = CreateMobileButton("JUMP", UDim2.new(0.1, 0, 0.4, 0), function(pressed)
-        if pressed and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-            LocalPlayer.Character.Humanoid.Jump = true
-        end
-    end)
-    jumpButton.Parent = screenGui
-    
-    -- Tombol reload
-    local reloadButton = CreateMobileButton("RELOAD", UDim2.new(0.8, 0, 0.5, 0), function()
-        -- Tambahkan kode untuk reload senjata di sini
-    end)
-    reloadButton.Parent = screenGui
-    
-    -- Tombol menu
-    local menuButton = CreateMobileButton("MENU", UDim2.new(0.05, 0, 0.1, 0), function()
-        -- Tambahkan menu pengaturan di sini
-    end)
-    menuButton.Size = UDim2.new(0, 60, 0, 60)
-    menuButton.Parent = screenGui
-    
-    -- Handle input joystick
-    local moveConnection
-    local cameraConnection
-    
-    -- Joystick pergerakan
-    moveJoystick.Frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            moveConnection = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    moveJoystick:Reset()
-                    moveConnection:Disconnect()
-                else
-                    local move = moveJoystick:UpdatePosition(input)
-                    -- Update pergerakan karakter
-                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
-                        local humanoid = LocalPlayer.Character.Humanoid
-                        humanoid:Move(Vector3.new(move.X, 0, -move.Y) * 16)
-                    end
-                end
-            end)
-        end
-    end)
-    
-    -- Joystick kamera
-    cameraJoystick.Frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            cameraConnection = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    cameraJoystick:Reset()
-                    cameraConnection:Disconnect()
-                else
-                    local look = cameraJoystick:UpdatePosition(input)
-                    -- Update rotasi kamera
-                    local camera = workspace.CurrentCamera
-                    camera.CFrame = CFrame.new(
-                        camera.CFrame.Position,
-                        camera.CFrame.Position + camera.CFrame.LookVector + Vector3.new(look.X, 0, look.Y)
-                    )
-                end
-            end)
-        end
-    end)
-    
-    return screenGui
+    -- Jika tidak ada yang kena raycast, atau yang kena adalah bagian dari karakter target
+    return not raycastResult or raycastResult.Instance:IsDescendantOf(target.Parent)
 end
 
--- Fungsi untuk mendapatkan target terdekat
-local function GetClosestTarget()
-    local closest = nil
+local function GetBestTarget()
+    local bestTarget = nil
     local shortestDistance = math.huge
+    local centerScreen = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            local targetPart = player.Character:FindFirstChild(Config.Aimbot.TargetPart)
-            if targetPart then
+        if player ~= LP and player.Character then
+            local character = player.Character
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoidRootPart then
+                -- Cari bagian tubuh yang tersedia (prioritaskan Head)
+                local targetPart = character:FindFirstChild("Head") or humanoidRootPart
+                
+                -- Hitung jarak ke pemain
                 local distance = (targetPart.Position - Camera.CFrame.Position).Magnitude
-                if distance < shortestDistance then
-                    if Config.Aimbot.WallCheck then
-                        local ray = Ray.new(
-                            Camera.CFrame.Position,
-                            (targetPart.Position - Camera.CFrame.Position).Unit * 1000
-                        )
-                        local hit, _ = workspace:FindPartOnRayWithIgnoreList(ray, {LocalPlayer.Character})
+                
+                -- Cek apakah target dalam jangkauan maksimum
+                if distance <= MaxAimDistance then
+                    -- Cek apakah target terlihat di layar
+                    local screenPoint, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+                    
+                    if onScreen then
+                        -- Hitung jarak dari tengah layar ke target
+                        local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+                        local distanceToCenter = (screenPos - centerScreen).Magnitude
                         
-                        if hit and hit:IsDescendantOf(player.Character) then
-                            closest = targetPart
-                            shortestDistance = distance
+                        -- Cek apakah target dalam jangkauan FOV dan lebih dekat dari target sebelumnya
+                        if distanceToCenter < FOVRadius and distanceToCenter < shortestDistance then
+                            -- Cek apakah target terlihat (tidak terhalang tembok)
+                            if IsVisible(targetPart) then
+                                shortestDistance = distanceToCenter
+                                bestTarget = targetPart
+                            end
                         end
-                    else
-                        closest = targetPart
-                        shortestDistance = distance
                     end
                 end
             end
         end
     end
     
-    return closest
+    return bestTarget
 end
 
--- Aimbot
+--========================================================--
+-- LOOP PRINCIPAL
+--========================================================--
 RunService.RenderStepped:Connect(function()
-    if Config.Aimbot.Enabled and Config.Aimbot.AutoShoot then
-        Target = GetClosestTarget()
-        if Target then
-            local targetPos = Target.Position
-            local cameraPos = Camera.CFrame.Position
-            local direction = (targetPos - cameraPos).Unit
+    -- FOV RGB (TETAP DI TENGAH LAYAR)
+    hue = (hue + 1) % 360
+    FOVCircle.Color = Color3.fromHSV(hue / 360, 1, 1)
+    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+
+    -- AIMBOT CEPAT
+    if AimbotOn then
+        local target = GetBestTarget()
+        if target then
+            -- Dapatkan posisi target
+            local targetPos = target.Position
             
-            -- Apply smoothing
+            -- Pastikan target adalah kepala
+            local targetHead = target
+            if target.Name ~= "Head" and target.Parent:FindFirstChild("Head") then
+                targetHead = target.Parent.Head
+                targetPos = targetHead.Position
+            end
+            
+            -- Dapatkan kecepatan target
+            local vel = targetHead.Velocity
+            
+            -- Prediksi posisi target dengan mempertimbangkan kecepatan
+            local predictedPos = targetPos + (vel * PredictionTime)
+            
+            -- Hitung arah yang diperlukan untuk melihat ke target
+            local camera = workspace.CurrentCamera
+            local cameraPos = camera.CFrame.Position
+            local direction = (predictedPos - cameraPos).Unit
+            
+            -- Buat CFrame baru yang mengarah ke target
             local targetCF = CFrame.new(cameraPos, cameraPos + direction)
-            Camera.CFrame = Camera.CFrame:Lerp(targetCF, Config.Aimbot.Smoothing)
             
-            -- Auto shoot
-            -- Tambahkan kode untuk menembak otomatis di sini
+            -- Terapkan dengan smoothing untuk lock-on yang lebih baik
+            camera.CFrame = camera.CFrame:Lerp(targetCF, 0.98) -- Diperhalus untuk pergerakan yang lebih natural
+        end
+    end
+
+    -- ESP
+    for plr, objs in pairs(ESPObjects) do
+        local char = plr.Character
+        if ESPOn and char and char:FindFirstChild("HumanoidRootPart") then
+            local root = char.HumanoidRootPart
+            local top = root.Position + Vector3.new(0, 3, 0)
+            local bottom = root.Position - Vector3.new(0, 3, 0)
+
+            local topPos = Camera:WorldToViewportPoint(top)
+            local botPos = Camera:WorldToViewportPoint(bottom)
+
+            if topPos.Z > 0 and botPos.Z > 0 then
+                local sizeY = topPos.Y - botPos.Y
+                local sizeX = sizeY / 1.5
+
+                -- BOX
+                objs.Box.Size = Vector2.new(sizeX, sizeY)
+                objs.Box.Position = Vector2.new(topPos.X - sizeX/2, botPos.Y)
+                objs.Box.Visible = true
+
+                -- LINE (tracer)
+                objs.Line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                objs.Line.To = Vector2.new(topPos.X, botPos.Y + sizeY/2)
+                objs.Line.Visible = true
+            else
+                objs.Box.Visible = false
+                objs.Line.Visible = false
+            end
+        else
+            objs.Box.Visible = false
+            objs.Line.Visible = false
         end
     end
 end)
 
--- Inisialisasi UI Mobile
-local MobileUI = CreateMobileUI()
-MobileUI.Parent = PlayerGui
-
--- Notifikasi
-local function Notify(message, duration)
-    local notif = Instance.new("TextLabel")
-    notif.Name = "Notification"
-    notif.Parent = MobileUI
-    notif.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    notif.BackgroundTransparency = 0.5
-    notif.Position = UDim2.new(0.5, -100, 0.1, 0)
-    notif.Size = UDim2.new(0, 200, 0, 40)
-    notif.Font = Enum.Font.GothamBold
-    notif.Text = message
-    notif.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notif.TextSize = 14
-    notif.TextWrapped = true
-    notif.Visible = true
-    
-    game:GetService("TweenService"):Create(
-        notif,
-        TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {BackgroundTransparency = 0.8}
-    ):Play()
-    
-    game:GetService("Debris"):AddItem(notif, duration or 3)
-end
-
--- Notifikasi saat script berhasil dimuat
-Notify("Westbound 1911 Mobile Loaded!", 5)
+--========================================================--
+-- HOTKEYS
+--========================================================--
+UIS.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        if input.KeyCode == Enum.KeyCode.F1 then
+            ESPOn = not ESPOn
+            btnESP.Text = "ESP: " .. (ESPOn and "ON" or "OFF")
+        elseif input.KeyCode == Enum.KeyCode.F2 then
+            AimbotOn = not AimbotOn
+            btnAimbot.Text = "Aimbot: " .. (AimbotOn and "ON" or "OFF")
+        end
+    end
+end)
